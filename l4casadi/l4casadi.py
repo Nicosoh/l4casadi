@@ -393,10 +393,10 @@ class L4CasADi(object):
     def _trace_jac_model(self, inp):
         if self.batched:
             def with_batch_dim(x):
-                return torch.func.vmap(jacrev(self.model))(x[:, None])[:, 0].permute(1, 0, 2, 3)
+                return torch.func.vmap(jacrev(self.model), chunk_size=1)(x[:, None])[:, 0].permute(1, 0, 2, 3)
 
             return make_fx(functionalize(with_batch_dim, remove='mutations_and_views'))(inp)
-        return make_fx(functionalize(jacrev(self.model), remove='mutations_and_views'))(inp)
+        return make_fx(functionalize(jacrev(self.model, chunk_size=1), remove='mutations_and_views'))(inp)
 
     def _trace_adj1_model(self):
         p_d = torch.zeros(self._input_shape).to(self.device)
@@ -417,10 +417,10 @@ class L4CasADi(object):
         # TODO: replace jacfwd with jacrev depending on answer in https://github.com/pytorch/pytorch/issues/130735
         if self.batched:
             def with_batch_dim(p, x):
-                return torch.func.vmap(jacfwd(_vjp, argnums=0))(p[:, None], x[:, None])[:, 0].permute(3, 2, 0, 1)
+                return torch.func.vmap(jacrev(_vjp, argnums=0))(p[:, None], x[:, None])[:, 0].permute(3, 2, 0, 1)
 
             return make_fx(functionalize(with_batch_dim, remove='mutations_and_views'))(p_d, t_d)
-        return make_fx(functionalize(jacfwd(_vjp, argnums=0), remove='mutations_and_views'))(p_d, t_d)
+        return make_fx(functionalize(jacrev(_vjp, argnums=0), remove='mutations_and_views'))(p_d, t_d)
 
     def _trace_jac_adj1_t_model(self):
         p_d = torch.zeros(self._input_shape).to(self.device)
@@ -432,19 +432,19 @@ class L4CasADi(object):
         # TODO: replace jacfwd with jacrev depending on answer in https://github.com/pytorch/pytorch/issues/130735
         if self.batched:
             def with_batch_dim(p, x):
-                return torch.func.vmap(jacfwd(_vjp, argnums=1))(p[:, None], x[:, None])[:, 0].permute(3, 2, 0, 1)
+                return torch.func.vmap(jacrev(_vjp, argnums=1))(p[:, None], x[:, None])[:, 0].permute(3, 2, 0, 1)
 
             return make_fx(functionalize(with_batch_dim, remove='mutations_and_views'))(p_d, t_d)
-        return make_fx(functionalize(jacfwd(_vjp, argnums=1), remove='mutations_and_views'))(p_d, t_d)
+        return make_fx(functionalize(jacrev(_vjp, argnums=1), remove='mutations_and_views'))(p_d, t_d)
 
     def _trace_hess_model(self, inp):
         if self.batched:
             def with_batch_dim(x):
                 # Permutation is trial and error
-                return torch.func.vmap(jacrev(jacrev(self.model)))(x[:, None])[:, 0].permute(1, 3, 2, 0, 4, 5)
+                return torch.func.vmap(jacrev(jacrev(self.model, chunk_size=1)))(x[:, None])[:, 0].permute(1, 3, 2, 0, 4, 5)
 
             return make_fx(functionalize(with_batch_dim, remove='mutations_and_views'))(inp)
-        return make_fx(functionalize(jacrev(jacrev(self.model)), remove='mutations_and_views'))(inp)
+        return make_fx(functionalize(jacrev(jacrev(self.model, chunk_size=1)), remove='mutations_and_views'))(inp)
 
     def export_torch_traces(self) -> Tuple[bool, bool, bool, bool]:
         d_inp = torch.zeros(self._input_shape)
